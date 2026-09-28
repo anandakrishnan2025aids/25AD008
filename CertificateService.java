@@ -5,12 +5,16 @@ import com.digitalcertificate.exception.CertificateRevokedException;
 import com.digitalcertificate.model.Certificate;
 import com.digitalcertificate.model.Course;
 import com.digitalcertificate.model.Participant;
+import com.digitalcertificate.model.VerificationRecord;
 import com.digitalcertificate.repository.CertificateRepository;
 import com.digitalcertificate.repository.CourseRepository;
 import com.digitalcertificate.repository.ParticipantRepository;
+import com.digitalcertificate.repository.VerificationRecordRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Service
@@ -18,6 +22,16 @@ public class CertificateService {
 
     @Autowired
     private CertificateRepository certificateRepository;
+
+    @Autowired
+    private ParticipantRepository participantRepository;
+
+    @Autowired
+    private CourseRepository courseRepository;
+
+    @Autowired
+    private VerificationRecordRepository verificationRecordRepository;
+
     public Certificate verifyCertificate(String verificationCode) {
 
         Certificate certificate =
@@ -28,12 +42,38 @@ public class CertificateService {
                                         "Certificate not found"));
 
         if (certificate.isRevoked()) {
+
+            VerificationRecord record =
+                    new VerificationRecord();
+
+            record.setVerificationTime(
+                    LocalDateTime.now());
+
+            record.setResult("INVALID");
+
+            record.setCertificate(certificate);
+
+            verificationRecordRepository.save(record);
+
             throw new CertificateRevokedException(
                     "Certificate has been revoked");
         }
 
+        VerificationRecord record =
+                new VerificationRecord();
+
+        record.setVerificationTime(
+                LocalDateTime.now());
+
+        record.setResult("VALID");
+
+        record.setCertificate(certificate);
+
+        verificationRecordRepository.save(record);
+
         return certificate;
     }
+
     public Certificate revokeCertificate(String certificateId) {
 
         Certificate certificate =
@@ -44,9 +84,11 @@ public class CertificateService {
                                         "Certificate not found"));
 
         certificate.setRevoked(true);
+        certificate.setRevokedDate(LocalDateTime.now());
 
         return certificateRepository.save(certificate);
     }
+
     public String generateVerificationCode() {
 
         String code;
@@ -63,27 +105,26 @@ public class CertificateService {
 
         return code;
     }
-    @Autowired
-    private ParticipantRepository participantRepository;
 
-    @Autowired
-    private CourseRepository courseRepository;
     private String generateCertificateId() {
 
         return "CERT" + System.currentTimeMillis();
     }
+
     public Certificate issueCertificate(
             Long participantId,
             Long courseId) {
 
         Participant participant =
-                participantRepository.findById(participantId)
+                participantRepository
+                        .findById(participantId)
                         .orElseThrow(() ->
                                 new RuntimeException(
                                         "Participant not found"));
 
         Course course =
-                courseRepository.findById(courseId)
+                courseRepository
+                        .findById(courseId)
                         .orElseThrow(() ->
                                 new RuntimeException(
                                         "Course not found"));
@@ -98,7 +139,7 @@ public class CertificateService {
                 generateVerificationCode());
 
         certificate.setIssueDate(
-                java.time.LocalDate.now());
+                LocalDate.now());
 
         certificate.setRevoked(false);
 
